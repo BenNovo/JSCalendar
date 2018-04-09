@@ -1,0 +1,17 @@
+#calendar
+{
+    background-color: #F5DEB3;
+    border-style: solid;
+}
+#days
+{
+    width: 13.79999%;
+    line-height: 2.5;
+    text-align: center;
+    border-style: solid;
+    display: inline-block;
+}
+#catImage
+{
+    text-align: center;
+}

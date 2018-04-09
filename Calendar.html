@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Calendar</title>
+		<link href = "CalendarStyle.css" rel = "stylesheet" type = "text/css" />
+		<!--included libraries-->
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		<script src="http://classes.engineering.wustl.edu/cse330/content/calendar.min.js"></script>
+	</head>
+	<body>
+		<!--Title-->
+		<header>Cat Calendar</header>
+		<div id = "logInInfo"></div>
+		<div id = "calendar">
+			<div id = "calHeader"></div>
+			<div id = "weekDays"></div>
+			<div id = "numDays"></div>
+			<div id = "actionPanel"></div>
+		</div>
+		<div id = "instructionPanel">Dates: ##/##/#### <br/>Times: #:## - #:## <br/>Share with up to four users, entered in csv format: UserA,UserB,UserC,UserD</div>
+		<div id = "errorPanel"></div>
+		<div id = "catImage"><a href="http://thecatapi.com"><img src="http://thecatapi.com/api/images/get?format=src&type=gif" alt = "cat"></a></div>
+		<!--Javascript-->
+		<script>
+			//Object to handle all variables that would be sessioned in PHP
+			var session = {
+				username: null,
+				loggedIn: false
+			};
+			var currentMonth = new Month(2018, 3);
+			var color = "#F5DEB3";
+			var token;
+			function highlight()
+			{
+				color = "#FFFF99";
+				clearCalendar();
+				createCalendar();
+			}
+			function unhighlight()
+			{
+				color = "#F5DEB3";
+				clearCalendar();
+				createCalendar();
+			}
+			function logInForm()
+			{
+				//Inputs for logging in
+				var usernameText = document.createElement("LABEL");
+				usernameText.id= "usernameText";
+				usernameText.innerHTML = "Username: <input id = \"uID\" type=\"text\" name=\"username\"/>";
+				var passwordText = document.createElement("LABEL");
+				passwordText.id= "passwordText";
+				passwordText.innerHTML = "Password: <input id = \"pID\" type=\"password\" name=\"password\"/>";
+				var logInRadio = document.createElement("INPUT");
+				logInRadio.type = "radio";
+				logInRadio.name = "action";
+				logInRadio.value = "login";
+				logInRadio.id = "LogIn";
+				var logInLabel = document.createElement("LABEL");
+				logInLabel.for = "LogIn";
+				logInLabel.id = "loginLabel";
+				logInLabel.textContent = "LogIn";
+				var createAccountRadio = document.createElement("INPUT");
+				createAccountRadio.type = "radio";
+				createAccountRadio.name = "action";
+				createAccountRadio.value = "createUser";
+				createAccountRadio.id = "CreateUser";
+				var createAccountLabel = document.createElement("LABEL");
+				createAccountLabel.for = "CreateUser";
+				createAccountLabel.id = "createUserLabel";
+				createAccountLabel.textContent = "New User";
+				var logInButton = document.createElement("INPUT");
+				logInButton.type = "button";
+				logInButton.value = "Submit";
+				logInButton.id = "logInButton";
+				document.getElementById("logInInfo").appendChild(usernameText);
+				document.getElementById("logInInfo").appendChild(passwordText);
+				document.getElementById("logInInfo").appendChild(logInLabel);
+				document.getElementById("logInInfo").appendChild(logInRadio);
+				document.getElementById("logInInfo").appendChild(createAccountLabel);
+				document.getElementById("logInInfo").appendChild(createAccountRadio);
+				document.getElementById("logInInfo").appendChild(logInButton);
+				//Event listener for the login inputs
+				document.getElementById("logInButton").addEventListener("click", loginValidate, false);
+			}
+			function newCat()
+			{
+				var current = document.getElementById("catImage");
+				current.removeChild(current.firstChild);
+				current.innerHTML = "<a href=\"http://thecatapi.com\"><img src=\"http://thecatapi.com/api/images/get?format=src&type=gif\" alt = \"cat\"></a>";
+			}
+			function clearCalendar()
+			{
+				var temp1 = document.getElementById("calendar").firstChild;
+				while(temp1)
+				{
+					var temp2 = temp1.firstChild;
+					while(temp2)
+					{
+						temp1.removeChild(temp2);
+						temp2 = temp1.firstChild;
+					}
+					temp1 = temp1.nextSibling;
+				}
+				temp1 = document.getElementById("errorPanel").firstChild;
+				while(temp1)
+				{
+					document.getElementById("errorPanel").removeChild(temp1);
+					temp1 = document.getElementById("errorPanel").firstChild;
+				}
+			}
+			function nextMonth()
+			{
+				currentMonth = currentMonth.nextMonth();
+				//remove previous calendar elements
+				clearCalendar();
+				createCalendar();
+			}
+			function previousMonth()
+			{
+				currentMonth = currentMonth.prevMonth();
+				//remove previous calendar elements
+				clearCalendar();
+				createCalendar();
+			}
+			function addEvent(eventDescription, eventDate, eventTime)
+			{
+				eventDescription = document.getElementById("eventText").value;
+				eventDate = document.getElementById("eventDate").value;
+				eventTime = document.getElementById("eventTime").value;
+				//insert event
+				if(typeof eventDescription !== 'undefined' && typeof eventDate !== 'undefined' && typeof eventTime !== 'undefined') {
+					var dataString = "description=" + encodeURIComponent(eventDescription) + "&date=" + encodeURIComponent(eventDate) + "&time=" + encodeURIComponent(eventTime) + "&token=" + encodeURIComponent(token);
+					var jsonData;
+					var xmlHttp = new XMLHttpRequest();
+					
+					xmlHttp.open("POST", "insertEvent.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						jsonData = JSON.parse(event.target.responseText);
+						if(jsonData.error === "Query failed")
+						{
+							var error = document.createElement("P");
+							error.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error);
+						}
+						if(jsonData.error == "success")
+						{
+						//clear calendar
+						clearCalendar();
+						//recreate calendar
+						createCalendar();
+						}
+						if(jsonData.error == "follow the required format for date: ##/##/#### and time: #:## - #:##")
+						{
+							var error2 = document.createElement("P");
+							error2.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error2);
+						}
+						
+					}, false);
+					
+					xmlHttp.send(dataString);				
+				}
+				else
+				{
+					var error = document.createElement("P");
+					error.innerHTML = "Please enter a date in the form ##/##/#### \nPlease enter a time in the form #:## - #:##";
+					document.getElementById("errorPanel").appendChild(error);
+				}
+			}
+			function shareEvent(eventDescription, eventDate, eventTime, eventUsers)
+			{
+				eventDescription = document.getElementById("eventText").value;
+				eventDate = document.getElementById("eventDate").value;
+				eventTime = document.getElementById("eventTime").value;
+				eventUsers = document.getElementById("userShare").value;
+				//share event
+				if(typeof eventDescription !== 'undefined' && typeof eventDate !== 'undefined' && typeof eventTime !== 'undefined') {
+					var dataString = "description=" + encodeURIComponent(eventDescription) + "&date=" + encodeURIComponent(eventDate) + "&time=" + encodeURIComponent(eventTime) + "&users=" + encodeURIComponent(eventUsers) + "&token=" + encodeURIComponent(token);
+					var jsonData;
+					var xmlHttp = new XMLHttpRequest();
+					
+					xmlHttp.open("POST", "shareEvent.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						jsonData = JSON.parse(event.target.responseText);
+						if(jsonData.error == "Query failed")
+						{
+							var error = document.createElement("P");
+							error.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error);
+						}
+						if(jsonData.error == "success")
+						{
+						//clear calendar
+						clearCalendar();
+						//recreate calendar
+						createCalendar();
+						}
+						if(jsonData.error == "follow the required format for date: ##/##/#### and time: #:## - #:## and up to four users to share with as a csv entry")
+						{
+							var error2 = document.createElement("P");
+							error2.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error2);
+						}
+						
+					}, false);
+					
+					xmlHttp.send(dataString);				
+				}
+				else
+				{
+					var error = document.createElement("P");
+					error.innerHTML = "Please enter a date in the form ##/##/#### \nPlease enter a time in the form #:## - #:##";
+					document.getElementById("errorPanel").appendChild(error);
+				}
+			}
+			function deleteEvent(eventDescription, eventDate, eventTime)
+			{
+				eventDescription = document.getElementById("eventText").value;
+				eventDate = document.getElementById("eventDate").value;
+				eventTime = document.getElementById("eventTime").value;
+				//delete event
+				if(typeof eventDescription !== 'undefined' && typeof eventDate !== 'undefined' && typeof eventTime !== 'undefined') {
+					var dataString = "description=" + encodeURIComponent(eventDescription) + "&date=" + encodeURIComponent(eventDate) + "&time=" + encodeURIComponent(eventTime) + "&token=" + encodeURIComponent(token);
+					var jsonData;
+					var xmlHttp = new XMLHttpRequest();
+					
+					xmlHttp.open("POST", "deleteEvent.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						jsonData = JSON.parse(event.target.responseText);
+						if(jsonData.error == "Query failed")
+						{
+							var error = document.createElement("P");
+							error.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error);
+						}
+						if(jsonData.error == "success")
+						{
+						//clear calendar
+						clearCalendar();
+						//recreate calendar
+						createCalendar();
+						}
+						if(jsonData.error == "follow the required format for date: ##/##/#### and time: #:## - #:##")
+						{
+							var error2 = document.createElement("P");
+							error2.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error2);
+						}
+						
+					}, false);
+					
+					xmlHttp.send(dataString);				
+				}
+				else
+				{
+					var error = document.createElement("P");
+					error.innerHTML = "Please enter a date in the form ##/##/#### \nPlease enter a time in the form #:## - #:##";
+					document.getElementById("errorPanel").appendChild(error);
+				}
+			}
+			function modDesc(eventDescription, eventDate, eventTime)
+			{
+				eventDescription = document.getElementById("eventText").value;
+				eventDate = document.getElementById("eventDate").value;
+				eventTime = document.getElementById("eventTime").value;
+				//mod event by Desc
+				if(typeof eventDescription !== 'undefined' && typeof eventDate !== 'undefined' && typeof eventTime !== 'undefined') {
+					var dataString = "description=" + encodeURIComponent(eventDescription) + "&date=" + encodeURIComponent(eventDate) + "&time=" + encodeURIComponent(eventTime) + "&token=" + encodeURIComponent(token);
+					var jsonData;
+					var xmlHttp = new XMLHttpRequest();
+					
+					xmlHttp.open("POST", "modDesc.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						jsonData = JSON.parse(event.target.responseText);
+						if(jsonData.error == "Query failed")
+						{
+							var error = document.createElement("P");
+							error.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error);
+						}
+						if(jsonData.error == "success")
+						{
+						//clear calendar
+						clearCalendar();
+						//recreate calendar
+						createCalendar();
+						}
+						if(jsonData.error == "follow the required format for date: ##/##/#### and time: #:## - #:##")
+						{
+							var error2 = document.createElement("P");
+							error2.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error2);
+						}
+						
+					}, false);
+					
+					xmlHttp.send(dataString);				
+				}
+				else
+				{
+					var error = document.createElement("P");
+					error.innerHTML = "Please enter a date in the form ##/##/#### \nPlease enter a time in the form #:## - #:##";
+					document.getElementById("errorPanel").appendChild(error);
+				}
+			}
+			function modDate(eventDescription, eventDate, eventTime)
+			{
+				eventDescription = document.getElementById("eventText").value;
+				eventDate = document.getElementById("eventDate").value;
+				eventTime = document.getElementById("eventTime").value;
+				//mod event by Date
+				if(typeof eventDescription !== 'undefined' && typeof eventDate !== 'undefined' && typeof eventTime !== 'undefined') {
+					var dataString = "description=" + encodeURIComponent(eventDescription) + "&date=" + encodeURIComponent(eventDate) + "&time=" + encodeURIComponent(eventTime) + "&token=" + encodeURIComponent(token);
+					var jsonData;
+					var xmlHttp = new XMLHttpRequest();
+					
+					xmlHttp.open("POST", "modDate.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						jsonData = JSON.parse(event.target.responseText);
+						if(jsonData.error == "Query failed")
+						{
+							var error = document.createElement("P");
+							error.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error);
+						}
+						if(jsonData.error == "success")
+						{
+						//clear calendar
+						clearCalendar();
+						//recreate calendar
+						createCalendar();
+						}
+						if(jsonData.error == "follow the required format for date: ##/##/#### and time: #:## - #:##")
+						{
+							var error2 = document.createElement("P");
+							error2.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error2);
+						}
+						
+					}, false);
+					
+					xmlHttp.send(dataString);				
+				}
+				else
+				{
+					var error = document.createElement("P");
+					error.innerHTML = "Please enter a date in the form ##/##/#### \nPlease enter a time in the form #:## - #:##";
+					document.getElementById("errorPanel").appendChild(error);
+				}
+			}
+			function modTime(eventDescription, eventDate, eventTime)
+			{
+				eventDescription = document.getElementById("eventText").value;
+				eventDate = document.getElementById("eventDate").value;
+				eventTime = document.getElementById("eventTime").value;
+				//mod event by Time
+				if(typeof eventDescription !== 'undefined' && typeof eventDate !== 'undefined' && typeof eventTime !== 'undefined') {
+					var dataString = "description=" + encodeURIComponent(eventDescription) + "&date=" + encodeURIComponent(eventDate) + "&time=" + encodeURIComponent(eventTime) + "&token=" + encodeURIComponent(token);
+					var jsonData;
+					var xmlHttp = new XMLHttpRequest();
+					
+					xmlHttp.open("POST", "modTime.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						jsonData = JSON.parse(event.target.responseText);
+						if(jsonData.error == "Query failed")
+						{
+							var error = document.createElement("P");
+							error.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error);
+						}
+						if(jsonData.error == "success")
+						{
+						//clear calendar
+						clearCalendar();
+						//recreate calendar
+						createCalendar();
+						}
+						if(jsonData.error == "follow the required format for date: ##/##/#### and time: #:## - #:##")
+						{
+							var error2 = document.createElement("P");
+							error2.innerHTML = jsonData.error;
+							document.getElementById("errorPanel").appendChild(error2);
+						}
+						
+					}, false);
+					
+					xmlHttp.send(dataString);				
+				}
+				else
+				{
+					var error = document.createElement("P");
+					error.innerHTML = "Please enter a date in the form ##/##/#### \nPlease enter a time in the form #:## - #:##";
+					document.getElementById("errorPanel").appendChild(error);
+				}
+			}
+			function daysToDateString(d)
+			{
+				var date = d.substring(4,7);
+				if(date == "Jan")
+				{
+					date = "01/";
+				}
+				if(date == "Feb")
+				{
+					date = "02/";
+				}
+				if(date == "Mar")
+				{
+					date = "03/";
+				}
+				if(date == "Apr")
+				{
+					date = "04/";
+				}
+				if(date == "May")
+				{
+					date = "05/";
+				}
+				if(date == "Jun")
+				{
+					date = "06/";
+				}
+				if(date == "Jul")
+				{
+					date = "07/";
+				}
+				if(date == "Aug")
+				{
+					date = "08/";
+				}
+				if(date == "Sep")
+				{
+					date = "09/";
+				}
+				if(date == "Oct")
+				{
+					date = "10/";
+				}
+				if(date == "Nov")
+				{
+					date = "11/";
+				}
+				if(date == "Dec")
+				{
+					date = "12/";
+				}
+				date += d.substring(8,10) + "/" + d.substring(11, 15);
+				return date;
+			}
+			function createCalendar()
+			{
+				//update divs to have calendar info
+				
+				document.getElementById("calHeader").innerHTML = "Current Month: " + currentMonth.month + "/" + currentMonth.year;
+				document.getElementById("weekDays").innerHTML =  "<div id = \"days\">Sunday</div><div id = \"days\">Monday</div><div id = \"days\">Tuesday</div><div id = \"days\">Wednesday</div><div id = \"days\">Thursday</div><div id = \"days\">Friday</div><div id = \"days\">Saturday</div>";
+				//query database for event data
+				var xmlHttp = new XMLHttpRequest();	
+					xmlHttp.open("POST", "getEvents.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						var jsonData = JSON.parse(event.target.responseText);
+						var weeks = currentMonth.getWeeks();
+						for(var w in weeks)
+						{
+							var days = weeks[w].getDates();
+							for(var d in days)
+							{
+								var dayDiv = document.createElement("DIV");
+								dayDiv.id = "days";								
+									if(daysToDateString(days[d] +"") in jsonData)
+									{
+										dayDiv.style.backgroundColor = color;
+										dayDiv.innerHTML = days[d] + "<br/>" + jsonData[daysToDateString(days[d] + "")];								
+									}
+									else
+									{
+										dayDiv.innerHTML = days[d];
+									}
+								document.getElementById("numDays").appendChild(dayDiv);
+							}
+						}
+						}, false);		
+					xmlHttp.send("token=" + encodeURIComponent(token));				
+				//create action button panel
+				var previousMonthButton = document.createElement("INPUT");
+				previousMonthButton.type = "button";
+				previousMonthButton.value = "Previous Month";
+				document.getElementById("actionPanel").appendChild(previousMonthButton);
+				previousMonthButton.addEventListener("click", previousMonth, false);
+				var nextMonthButton = document.createElement("INPUT");
+				nextMonthButton.type = "button";
+				nextMonthButton.value = "Next Month";
+				document.getElementById("actionPanel").appendChild(nextMonthButton);
+				nextMonthButton.addEventListener("click", nextMonth, false);
+				var addEventButton = document.createElement("INPUT");
+				addEventButton.type = "button";
+				addEventButton.value = "Add Event";
+				addEventButton.id = "addEventButton";
+				var deleteEventButton = document.createElement("INPUT");
+				deleteEventButton.type = "button";
+				deleteEventButton.value = "Delete Event";
+				deleteEventButton.id = "deleteEventButton";
+				var modEventButtonByDesc = document.createElement("INPUT");
+				modEventButtonByDesc.type = "button";
+				modEventButtonByDesc.value = "Modify Event By Description";
+				modEventButtonByDesc.id = "modDesc";
+				var modEventButtonByDate = document.createElement("INPUT");
+				modEventButtonByDate.type = "button";
+				modEventButtonByDate.value = "Modify Event By Date";
+				modEventButtonByDate.id = "modDate";
+				var modEventButtonByTime = document.createElement("INPUT");
+				modEventButtonByTime.type = "button";
+				modEventButtonByTime.value = "Modify Event By Time";
+				modEventButtonByTime.id = "modTime";
+				var eventDescription = document.createElement("LABEL");
+				eventDescription.innerHTML = "Event Description: <input id = \"eventText\" type=\"text\" name=\"eventText\"/>";
+				var eventDate = document.createElement("LABEL");
+				eventDate.innerHTML = "Event Date: <input id = \"eventDate\" type=\"text\" name=\"eventDate\"/>";
+				var eventTime = document.createElement("LABEL");
+				eventTime.innerHTML = "Event Time: <input id = \"eventTime\" type=\"text\" name=\"eventTime\"/>";
+				document.getElementById("actionPanel").appendChild(eventDescription);
+				document.getElementById("actionPanel").appendChild(eventDate);
+				document.getElementById("actionPanel").appendChild(eventTime);
+				document.getElementById("actionPanel").appendChild(addEventButton);
+				document.getElementById("actionPanel").appendChild(deleteEventButton);
+				var share = document.createElement("LABEL");
+				share.innerHTML = "Share event with: <input id = \"userShare\" type=\"text\" name=\"shareEvent\"/>";
+				document.getElementById("actionPanel").appendChild(share);
+				var shareButton = document.createElement("INPUT");
+				shareButton.type = "button";
+				shareButton.value = "Share Event";
+				document.getElementById("actionPanel").appendChild(shareButton);
+				shareButton.addEventListener("click", shareEvent, false);
+				document.getElementById("actionPanel").appendChild(modEventButtonByDesc);
+				document.getElementById("actionPanel").appendChild(modEventButtonByDate);
+				document.getElementById("actionPanel").appendChild(modEventButtonByTime);
+				document.getElementById("addEventButton").addEventListener("click", addEvent, false);
+				document.getElementById("deleteEventButton").addEventListener("click", deleteEvent, false);
+				document.getElementById("modDesc").addEventListener("click", modDesc, false);
+				document.getElementById("modDate").addEventListener("click", modDate, false);
+				document.getElementById("modTime").addEventListener("click", modTime, false);								
+				var highlightEventsButton = document.createElement("INPUT");
+				highlightEventsButton.type = "button";
+				highlightEventsButton.value = "Highlight Events";
+				document.getElementById("actionPanel").appendChild(highlightEventsButton);
+				highlightEventsButton.addEventListener("click", highlight, false);
+				var unhighlightEventsButton = document.createElement("INPUT");
+				unhighlightEventsButton.type = "button";
+				unhighlightEventsButton.value = "Unhighlight Events";
+				document.getElementById("actionPanel").appendChild(unhighlightEventsButton);
+				unhighlightEventsButton.addEventListener("click", unhighlight, false);
+				var catButton = document.createElement("INPUT");
+				catButton.type = "button";
+				catButton.value = "Get New Cat";
+				document.getElementById("actionPanel").appendChild(catButton);
+				catButton.addEventListener("click", newCat, false);
+			}
+			//Login inputs, only display if no one is logged in
+			if(!session.loggedIn) {
+				logInForm();
+				createCalendar();
+			}
+			//If someone is logged in, then display the log out button
+			else {
+				//create calendar
+				createCalendar();
+			}
+			
+			//Function to validate input data, make sure the user can log in, then set Session variables
+			function loginValidate() {
+				let username = document.getElementById("uID").value;
+				let password = document.getElementById("pID").value;
+				let actions = document.getElementsByName("action");
+				let action = null;
+				//For loop to figure out which action needs to be done
+				for(var i=0; i<actions.length; i++) {
+					if(actions[i].checked) {
+						action = actions[i].value;
+						break;
+					}
+				}
+				//If all variables are set, then send an XML request to the server
+				if(typeof username !== 'undefined' && typeof password !== 'undefined' && typeof action !== 'undefined') {
+					var dataString = "username=" + encodeURIComponent(username) + "&password=" + encodeURIComponent(password) + "&action=" + encodeURIComponent(action);
+					
+					var xmlHttp = new XMLHttpRequest();
+					
+					xmlHttp.open("POST", "validateLogin.php", true);
+					xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					
+					xmlHttp.addEventListener("load", function(event){
+						var jsonData = JSON.parse(event.target.responseText);
+						if(jsonData.error == "success") {
+							//Log the mark the user as logged in
+							session.loggedIn = true;
+							session.username = username;
+							token = jsonData.token;
+							//remove current login boxes and buttons
+							var temp = document.getElementById("logInInfo").firstChild;
+							while(temp)
+							{
+								document.getElementById("logInInfo").removeChild(temp);
+								temp = document.getElementById("logInInfo").firstChild;
+							}
+							//add logout button
+							var logOutButton = document.createElement("INPUT");
+							logOutButton.type = "button";
+							logOutButton.value = "Log Out";
+							logOutButton.id = "logOutButton";
+							document.getElementById("logInInfo").appendChild(logOutButton);
+							document.getElementById("logOutButton").addEventListener("click", LogOut, false);
+							//clear and create cal
+							clearCalendar();
+							createCalendar();
+						}
+						else {							
+							var error = document.createElement("P");
+							error.innerHTML = jsonData.error + "";
+							document.getElementById("errorPanel").appendChild(error);
+						}
+						
+					}, false);
+					
+					xmlHttp.send(dataString);
+				}
+			}
+			
+			function LogOut() {
+				var dataString = "logOut=true";
+				
+				var xmlHttp = new XMLHttpRequest();
+				
+				xmlHttp.open("POST", "validateLogin.php", true);
+				xmlHttp.setRequestHeader("content-Type", "application/x-www-form-urlencoded");
+				
+				xmlHttp.send(dataString);
+				
+				session.loggedIn = false;
+				session.username = null;
+				clearCalendar();
+				document.getElementById("logInInfo").removeChild(document.getElementById("logOutButton"));
+				logInForm();
+				createCalendar();
+			}
+		</script>
+	</body>
+</html>
